@@ -20,21 +20,8 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Prepare Android SDK
-        run: |
-          # Download command-line tools (the only file you need)
-          # Update this URL if a newer version is released:
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          unzip -q commandlinetools-linux-*_latest.zip -d $HOME/android-sdk/cmdline-tools
-          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-
-          # Make SDK available to the build
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-
-          # Accept all licences (AGP will auto-download the needed platform & build-tools)
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
+      - name: Accept Android SDK licenses
+        run: yes | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --licenses
 
       - name: Build debug APK
         run: gradle assembleDebug
