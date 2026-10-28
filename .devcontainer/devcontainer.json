@@ -1,0 +1,13 @@
+{
+  "name": "iran-access-bridge",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "forwardPorts": [7860],
+  "portsAttributes": {
+    "7860": {
+      "label": "vless-ws bridge (HTTP API + /ws)",
+      "visibility": "public",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "postStartCommand": "cd server && npm install --no-audit --no-fund && (REMOTE_CHECK_URL=${REMOTE_CHECK_URL:-https://iran-access-test.hima-safety.workers.dev} INTERNAL_KEY=${INTERNAL_KEY:-} PORT=7860 nohup node session_server.js > /tmp/bridge.log 2>&1 & echo 'bridge started -> /tmp/bridge.log')"
+}
