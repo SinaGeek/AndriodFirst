@@ -14,6 +14,9 @@ State lives in a KV namespace (one-time tokens + live sessions auto-expire).
 
 ## Deploy via dashboard (no CLI, no card)
 
+> **Deployed already** ✅ — `https://iran-access-test.hima-safety.workers.dev`
+> (worker `iran-access-test`, KV namespace `iran-access-test`, ID `681377f575ac4a3e839776f2c105060c`).
+
 1. dash.cloudflare.com → **Workers & Pages** → **Create** → **Worker** (name it, Deploy the starter). Wait for the worker URL (`https://<name>.<account>.workers.dev`).
 2. Click **Edit** on your new worker (Quick Edit) → paste everything from `worker.js` over the starter code → Save → Deploy.
 3. Back in the worker → **Settings** → **Bindings** → **+ Add**:
@@ -21,17 +24,46 @@ State lives in a KV namespace (one-time tokens + live sessions auto-expire).
    - **Variables**: `DEV_GRANT_SECRET` (any random string), `INTERNAL_KEY` (any random string; give the same value to the bridge on Codespace), optional `TTL_MINUTES=30`; later set `BRIDGE_HOST` (Codespace public host, no protocol/port) and `BRIDGE_PORT=443`.
 4. Test: `GET https://<worker>.workers.dev/health` in the browser → `{"ok":true}`.
 
+### CLI-less redeploys from the dashboard (the trick we used)
+
+Open the worker's dashboard page and run this in the browser DevTools console
+(same-origin `/api/v4` call with your session cookies) after swapping in the
+current `worker.js` content:
+
+```js
+const code = "<paste worker.js content>";
+const meta = { main_module: 'worker.js', compatibility_date: '2025-05-01', bindings: [
+  { type: 'kv_namespace', name: 'SESSION', namespace_id: '<KV_ID>' },
+  { type: 'plain_text', name: 'DEV_GRANT_SECRET', text: '<secret>' },
+  { type: 'plain_text', name: 'INTERNAL_KEY', text: '<secret>' },
+  { type: 'plain_text', name: 'TTL_MINUTES', text: '30' },
+]};
+const fd = new FormData();
+fd.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }), 'metadata.json');
+fd.append('worker.js', new Blob([code], { type: 'application/javascript+module' }), 'worker.js');
+await fetch('/api/v4/accounts/<ACCOUNT_ID>/workers/scripts/iran-access-test', { method: 'PUT', body: fd });
+```
+
+`INTERNAL_KEY` for the bridge is also stored as the repo's **Codespaces secret**
+`INTERNAL_KEY` (Settings → Secrets and variables → Codespaces), so codespaces get
+it injected automatically.
+
 ## Testing path A (sites, today)
 
 In the app: set Backend URL to your worker URL → "Test HTTP relay" → you see the relay response (e.g., the egress IP API) — mechanical plumbing verified.
 
 ## Testing path B (true VPN tunnel)
 
+> **Automated**: `.devcontainer/devcontainer.json` now boots the bridge on
+> Codespace start (installs deps, starts the server on port 7860, forwards it
+> **public**), and `INTERNAL_KEY` is injected from the repo's Codespaces secret.
+> Manual way:
+
 1. Codespace: from the repo GitHub page → **Code → Codespaces → New**; inside run:
    ```
    cd server
    npm install
-   export REMOTE_CHECK_URL=https://<your-worker>.workers.dev
+   export REMOTE_CHECK_URL=https://iran-access-test.hima-safety.workers.dev
    export INTERNAL_KEY=<same as worker var>
    PORT=7860 npm start
    ```
