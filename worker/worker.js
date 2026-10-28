@@ -101,8 +101,8 @@ async function issueToken(env, { minutes, device }) {
   const payload = { v: 1, iat: now, exp: now + ttlSec, minutes: Number(minutes) || DEFAULT_TTL_MINUTES, device: String(device || 'unknown').slice(0, 64), nonce };
   const body = b64urlEncodeBuf(new TextEncoder().encode(JSON.stringify(payload)));
   const token = `${body}.${await hmacSign(env.DEV_GRANT_SECRET, body)}`;
-  const digest = hexOf(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)));
-  await env.SESSION.put(`u:${digest}`, '1', { expirationTtl: ttlSec + 60 }); // auto-evaporates; no deletes needed
+  // NOTE: the "used" marker (u:<digest>) is written by consumeToken() only —
+  // pre-registering here would make every token instantly unusable.
   return { token, expires_at: new Date(payload.exp * 1000).toISOString(), ttl_seconds: ttlSec, minutes: payload.minutes };
 }
 
