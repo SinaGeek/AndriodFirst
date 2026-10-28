@@ -76,8 +76,9 @@ function b64urlDecodeB(s) {
 }
 
 function hexOf(bytes) {
+  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   let s = '';
-  for (const b of bytes) s += b.toString(16).padStart(2, '0');
+  for (const b of arr) s += b.toString(16).padStart(2, '0');
   return s;
 }
 
@@ -203,7 +204,6 @@ export default {
 
     try {
       if (path === '/health' || path === '/') {
-        const stats = parseInt(path === '/health' ? 0 : 1, 10);
         if (path === '/health') return withCors(json({ ok: true, now: new Date().toISOString() }));
         // status page
         const hasBridge = !!bridgeTargetFromEnv(env);
