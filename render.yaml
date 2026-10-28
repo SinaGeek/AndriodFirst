@@ -1,0 +1,25 @@
+# Render Blueprint for the testing MVP backend.
+# Deploy: dashboard.render.com -> "New +" -> "Blueprint" -> pick this repo.
+# Runtime is Docker; the container builds from server/Dockerfile and serves
+#   the auth API + vless/ws inbound on a single port.
+services:
+  - type: web
+    name: iran-access-test
+    runtime: docker
+    rootDir: server
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: TTL_MINUTES
+        value: "30"
+      - key: ADMIT_DEV_GRANTS
+        value: "1"          # simulated-ad endpoint (testing build)
+      - key: DEV_GRANT_SECRET
+        generateValue: true # auto-random HMAC secret; keep or set your own
+      # Uncomment + set once you front it with your Cloudflare domain:
+      # - key: PUBLIC_HOST
+      #   value: vpn-test.your-domain.com
+      # - key: PUBLIC_PORT
+      #   value: "443"
+      - key: ADMIN_TOKEN
+        sync: false         # Render asks for a value at deploy time (or set your own)

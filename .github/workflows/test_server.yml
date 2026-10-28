@@ -1,0 +1,28 @@
+name: Server smoke test
+
+on:
+  push:
+    paths:
+      - 'server/**'
+      - '.github/workflows/test_server.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps (ws only)
+        run: npm install --no-audit --no-fund
+
+      - name: Run end-to-end smoke test (API + vless/ws bridge)
+        run: node smoke_test.js

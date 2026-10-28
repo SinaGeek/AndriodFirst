@@ -1,0 +1,17 @@
+{
+  "name": "iran-access-test-server",
+  "version": "1.0.0",
+  "description": "Testable MVP backend: ad-gated 30-min auth tokens + tiny VLESS-over-WS bridge (no Xray binary needed)",
+  "main": "session_server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node session_server.js",
+    "smoke": "node smoke_test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
