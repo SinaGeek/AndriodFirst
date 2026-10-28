@@ -61,20 +61,21 @@ const upstream = await new Promise((resolve) => {
 });
 
 try {
-  const h = await call(env(), '/health');
+  const env1 = env(); // ONE env/KV for the whole flow so state is shared (like real KV)
+  const h = await call(env1, '/health');
   ok('health', h.status === 200 && h.json.ok === true);
 
-  const root = await call(env(), '/');
+  const root = await call(env1, '/');
   ok('status page lists bridge state', root.status === 200 && root.json.ok === true && root.json.bridge_host === null);
 
   // no bridge host yet -> request-access still succeeds (hint; no link)
-  const g0 = await call(env(), '/api/v1/dev-grant', { method: 'POST', body: { minutes: 30, device: 'ci' } });
+  const g0 = await call(env1, '/api/v1/dev-grant', { method: 'POST', body: { minutes: 30, device: 'ci' } });
   ok('dev-grant issues token', g0.status === 200 && typeof g0.json.token === 'string' && g0.json.token.length > 30);
-  const ra0 = await call(env(), '/api/v1/request-access', { method: 'POST', body: { token: g0.json.token } });
+  const ra0 = await call(env1, '/api/v1/request-access', { method: 'POST', body: { token: g0.json.token } });
   ok('request-access without BRIDGE_HOST returns session + hint', ra0.status === 200 && /^[0-9a-f-]{36}$/.test(ra0.json.uuid) && ra0.json.vless_url === null, `hint=${(ra0.json.hint || '').slice(0, 60)}`);
 
   // reuse protection
-  const ra0b = await call(env(), '/api/v1/request-access', { method: 'POST', body: { token: g0.json.token } });
+  const ra0b = await call(env1, '/api/v1/request-access', { method: 'POST', body: { token: g0.json.token } });
   ok('token reuse rejected (409)', ra0b.status === 409);
 
   // with bridge host -> full link
