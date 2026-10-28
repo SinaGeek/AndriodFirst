@@ -42,18 +42,22 @@ public final class Api {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     public static void get(String url, Callback cb) {
-        send(url, "GET", null, cb);
+        send(url, "GET", null, null, cb);
+    }
+
+    public static void getWithHeader(String url, String headerName, String headerValue, Callback cb) {
+        send(url, "GET", null, new String[] { headerName, headerValue }, cb);
     }
 
     public static void postJson(String url, String json, Callback cb) {
-        send(url, "POST", json, cb);
+        send(url, "POST", json, null, cb);
     }
 
-    private static void send(String url, String method, final String json, final Callback cb) {
+    private static void send(String url, String method, final String json, final String[] header, final Callback cb) {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final Response response = doRequest(url, method, json);
+                final Response response = doRequest(url, method, json, header);
                 MAIN.post(new Runnable() {
                     @Override
                     public void run() {
@@ -64,7 +68,7 @@ public final class Api {
         }, "api-call").start();
     }
 
-    private static Response doRequest(String urlStr, String method, String json) {
+    private static Response doRequest(String urlStr, String method, String json, String[] header) {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(urlStr);
@@ -73,6 +77,9 @@ public final class Api {
             conn.setReadTimeout(20000);
             conn.setRequestMethod(method);
             conn.setRequestProperty("Accept", "application/json");
+            if (header != null && header.length == 2) {
+                conn.setRequestProperty(header[0], header[1]);
+            }
             if (json != null) {
                 conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");

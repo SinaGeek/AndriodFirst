@@ -1,0 +1,10 @@
+{
+  "name": "iran-access-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker token API + HTTP site relay (testing MVP)",
+  "type": "module",
+  "scripts": {
+    "test": "node test_worker.mjs",
+    "dev": "npx wrangler dev"
+  }
+}

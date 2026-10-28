@@ -1,0 +1,25 @@
+name: Worker test (offline)
+
+on:
+  push:
+    paths:
+      - 'worker/**'
+      - '.github/workflows/test_worker.yml'
+  workflow_dispatch:
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run offline worker flow test (no deps)
+        run: node test_worker.mjs

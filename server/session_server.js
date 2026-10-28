@@ -231,8 +231,7 @@ async function handleApi(req, res, url) {
   return null; // not an API route we handle (upgrade path falls through)
 }
 
-const server = http.createServer(async (req, res) => {
-  try {
+const server = http.createServer(async (req, res) => {  try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const handled = await handleApi(req, res, url);
     if (handled === null && !res.headersSent) {
@@ -245,7 +244,33 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-attachUpgradeHandler(server, { path: WS_PATH });
+attachUpgradeHandler(server, { path: WS_PATH, remoteCheck: remoteCheckForBridge() });
+
+/**
+ * Optional remote authority for session validity (used when bridge and
+ * token backend live in different places: bridge on Codespace, backend on
+ * Cloudflare Workers). vless_ws consults it on every client connection and
+ * re-checks periodically, so Worker-side revocations propagate live.
+ * Config: REMOTE_CHECK_URL + INTERNAL_KEY env vars.
+ */
+function remoteCheckForBridge() {
+  const urlStr = (process.env.REMOTE_CHECK_URL || '').trim();
+  if (!urlStr) return null;
+  const key = (process.env.INTERNAL_KEY || '').trim();
+  return async function remoteCheck(uuidHex) {
+    try {
+      const res = await fetch(`${urlStr.replace(/\/+$/, '')}/api/v1/internal/session-check?uuid=${uuidHex}`, {
+        headers: { 'x-internal-key': key },
+      });
+      const j = await res.json();
+      if (res.ok && j && j.ok) return { ok: true, uuid: j.uuid, seconds_left: j.seconds_left };
+      return null;
+    } catch (err) {
+      console.error('[remote-check] error:', err.message || err);
+      return null;
+    }
+  };
+}
 
 // 30-second janitor: enforces the strict TTL (kills expired sessions + streams)
 const janitor = setInterval(() => {
@@ -264,6 +289,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  PUBLIC_HOST ........ ${PUBLIC_HOST || '(derive from request Host header)'}`);
   console.log(`  dev-grant endpoint . ${ADMIT_DEV_GRANTS ? 'ENABLED (testing only)' : 'disabled'}`);
   console.log(`  admin API .......... ${ADMIN_TOKEN ? 'enabled' : 'disabled (set ADMIN_TOKEN)'}`);
+  console.log(`  remote-check ....... ${process.env.REMOTE_CHECK_URL ? 'ON (' + process.env.REMOTE_CHECK_URL + ')' : 'off (local store only)'}`);
 });
 
 function shutdown() {

@@ -77,6 +77,7 @@ function handleConnection(ws, options) {
   const teardown = () => {
     if (closed) return;
     closed = true;
+    if (handle.recheckTimer) { clearInterval(handle.recheckTimer); handle.recheckTimer = null; }
     try { ws.terminate(); } catch (_) { /* ignore */ }
     if (socket) { try { socket.destroy(); } catch (_) { /* ignore */ } }
     if (uuidHex) store.untrackConnection(uuidHex, handle);
@@ -87,7 +88,20 @@ function handleConnection(ws, options) {
   ws.on('error', () => teardown());
   ws.on('close', () => teardown());
 
-  ws.on('message', (data) => {
+  const startRemoteRecheck = () => {
+    if (!options.remoteCheck) return;
+    const ms = options.remoteRecheckMs || 45000;
+    handle.recheckTimer = setInterval(async () => {
+      const res = await options.remoteCheck(uuidHex).catch(() => null);
+      if (!res) {
+        console.log('[vless] remote check failed: revoked/expired - closing connection');
+        teardown();
+      }
+    }, ms);
+    if (handle.recheckTimer && typeof handle.recheckTimer.unref === 'function') handle.recheckTimer.unref();
+  };
+
+  ws.on('message', async (data) => {
     if (closed) return;
     const chunk = Buffer.isBuffer(data) ? data : Buffer.concat(Array.isArray(data) ? data : [Buffer.from(data)]);
 
@@ -131,7 +145,21 @@ function handleConnection(ws, options) {
       return;
     }
 
-    const session = store.getSession(parsedUuidHex);
+    // Wire protocol requires that we stop interpreting the buffer here; a
+    // remote auth check may follow (async), after which we connect upstream.
+    uuidHex = parsedUuidHex;
+    handle.uuidHex = parsedUuidHex;
+    headerParsed = true;
+    if (rest.length > 0) pending.push(rest);
+
+    let session = store.getSession(parsedUuidHex);
+    if (!session && options.remoteCheck) {
+      const remote = await options.remoteCheck(parsedUuidHex);
+      if (remote && remote.ok !== false) {
+        session = { uuid: remote.uuid || parsedUuidHex, expiresAt: remote.expiresAt || 0 };
+        handle.expiresAt = remote.expiresAt || null;
+      }
+    }
     if (!session) {
       console.log('[vless-client] rejected: unknown or expired uuid');
       try { ws.close(1008, 'unauthorized'); } catch (_) { /* ignore */ }
@@ -139,11 +167,8 @@ function handleConnection(ws, options) {
       return;
     }
 
-    uuidHex = parsedUuidHex;
-    handle.uuidHex = parsedUuidHex;
     store.trackConnection(uuidHex, handle);
-    headerParsed = true;
-    if (rest.length > 0) pending.push(rest);
+    startRemoteRecheck();
 
     connectUpstream(target, {
       uuidHex,

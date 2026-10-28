@@ -35,6 +35,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String K_BACKEND = "backend_url";
     private static final String K_VLESS = "vless_url";
     private static final String K_EXPIRES = "expires_at_ms";
+    private static final String K_TOKEN = "grant_token";
+    private static final String K_TOKEN_EXP = "grant_token_exp_ms";
     private static final String K_LOG = "log_text";
 
     private static final int SESSION_MINUTES = 30;
@@ -80,6 +82,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 onCopyClicked();
+            }
+        });
+        findViewById(R.id.relayBtn).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onRelayTestClicked();
             }
         });
         findViewById(R.id.openBtn).setOnClickListener(new View.OnClickListener() {
@@ -164,8 +172,73 @@ public class MainActivity extends AppCompatActivity {
                 if (grant == null) { showNetError("dev-grant", r); return; }
                 String token = grant.optString("token", "");
                 if (token.isEmpty()) { showError("dev-grant returned no token", r.body); return; }
-                log("✓ grant received (valid " + grant.optString("ttl_seconds", "?") + "s)");
+                double ttlSec = grant.optDouble("ttl_seconds", 300);
+                prefs.edit()
+                        .putString(K_TOKEN, token)
+                        .putLong(K_TOKEN_EXP, System.currentTimeMillis() + (long) (ttlSec * 1000))
+                        .apply();
+                log("✓ grant received (valid " + (long) ttlSec + "s)");
                 requestAccess(token);
+            }
+        });
+    }
+
+    /** Returns a still-valid grant token, refreshing it when needed. */
+    private void ensureGrantToken(final TokenConsumer consumer) {
+        String token = prefs.getString(K_TOKEN, null);
+        long exp = prefs.getLong(K_TOKEN_EXP, 0);
+        if (token != null && exp - System.currentTimeMillis() > 5000) {
+            consumer.got(token);
+            return;
+        }
+        String base = backendUrl();
+        if (base == null) {
+            showBackendDialog(true);
+            return;
+        }
+        log("→ refreshing ad-reward token");
+        Api.postJson(base + "/api/v1/dev-grant", "{\"minutes\":" + SESSION_MINUTES + ",\"device\":\"android-test\"}", new Api.Callback() {
+            @Override
+            public void onResult(Api.Response r) {
+                JSONObject grant = tryParse(r);
+                if (grant == null) { showNetError("dev-grant (refresh)", r); return; }
+                String fresh = grant.optString("token", "");
+                if (fresh.isEmpty()) { showError("no token on refresh", r.body); return; }
+                prefs.edit()
+                        .putString(K_TOKEN, fresh)
+                        .putLong(K_TOKEN_EXP, System.currentTimeMillis() + grant.optLong("ttl_seconds", 300) * 1000)
+                        .apply();
+                consumer.got(fresh);
+            }
+        });
+    }
+
+    interface TokenConsumer {
+        void got(String token);
+    }
+
+    /** Mechanical relay test: fetches a site through the backend without any VPN. */
+    private void onRelayTestClicked() {
+        final String base = backendUrl();
+        if (base == null) { showBackendDialog(true); return; }
+        final String target = "https://api.ipify.org?format=json";
+        ensureGrantToken(new TokenConsumer() {
+            @Override
+            public void got(String token) {
+                String url = base + "/api/v1/site-relay?url=" + android.net.Uri.encode(target);
+                log("→ relay GET " + target);
+                Api.getWithHeader(url, "x-access-token", token, new Api.Callback() {
+                    @Override
+                    public void onResult(Api.Response r) {
+                        if (r == null || !r.ok()) { showNetError("site-relay", r); return; }
+                        log("✓ relay HTTP " + r.status + ": " + (r.body == null ? "" : r.body.trim()));
+                        new AlertDialog.Builder(MainActivity.this)
+                                .setTitle("Relay test OK")
+                                .setMessage("Fetched through your backend:\n\n" + target + "\n\nResponse:\n" + r.body)
+                                .setPositiveButton("OK", null)
+                                .show();
+                    }
+                });
             }
         });
     }
@@ -184,7 +257,15 @@ public class MainActivity extends AppCompatActivity {
                 String vless = access.optString("vless_url", "");
                 String expiresIso = access.optString("expires_at", "");
                 int secondsLeft = access.optInt("seconds_left", -1);
-                if (vless.isEmpty()) { showError("no vless_url in response", r.body); return; }
+                if (vless.isEmpty()) {
+                    // Worker deployed but BRIDGE_HOST not set yet
+                    String hint = access.optString("hint", "bridge host not configured on backend");
+                    log("⚠ session created but no vless_url: " + hint);
+                    log("  uuid: " + access.optString("uuid", "?"));
+                    toast("Session created; set BRIDGE_HOST on the backend to get a connect link");
+                    refreshStatus();
+                    return;
+                }
 
                 long expiresAtMs = System.currentTimeMillis() + (secondsLeft > 0 ? secondsLeft * 1000L : SESSION_MINUTES * 60_000L);
                 prefs.edit()
@@ -195,7 +276,6 @@ public class MainActivity extends AppCompatActivity {
                 refreshStatus();
                 log("✓ session active until " + expiresIso);
                 log("  uuid: " + access.optString("uuid", "?"));
-                log("  " + secondsLeft + "s left now; WAN host: " + access.optJSONObject("server"));
                 toast("30-min session unlocked — import the link into V2RayNG");
                 onOpenV2rayClicked();
             }

@@ -1,0 +1,20 @@
+# Made usable both for dashboard-created test deployments and CLI deploys.
+# The main worker code lives in worker.js (paste it in the dashboard Quick Edit,
+# then add the KV binding + vars described in worker/README.md).
+name = "iran-access-test"
+main = "worker.js"
+compatibility_date = "2025-05-01"
+
+# Create the KV namespace in the dashboard (Workers & Pages -> KV -> Create),
+# then paste its id below and set the binding name to SESSION.
+[[kv_namespaces]]
+binding = "SESSION"
+id = "REPLACE_WITH_YOUR_KV_ID"
+
+[vars]
+# TTL_MINUTES = "30"
+# DEV_GRANT_SECRET = "change-me"
+# INTERNAL_KEY = "change-me"
+# BRIDGE_HOST = ""         # e.g. myspace-7860-abc12345.app.github.dev
+# BRIDGE_PORT = "443"
+# WS_PATH = "/ws"
