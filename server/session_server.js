@@ -191,7 +191,8 @@ async function handleApi(req, res, url) {
     });
   }
 
-  // ---------- admin ----------  const isAdmin = ADMIN_TOKEN && req.headers['x-admin-token'] === ADMIN_TOKEN;
+  // ---------- admin ----------
+  const isAdmin = ADMIN_TOKEN && req.headers['x-admin-token'] === ADMIN_TOKEN;
   if (path.startsWith('/api/v1/admin/')) {
     if (!isAdmin) {
       if (!ADMIN_TOKEN) {

@@ -205,13 +205,18 @@ async function main() {
     const ra = await api('/api/v1/request-access', { method: 'POST', body: { token: g.json.token } });
     const uuid = ra.json && ra.json.uuid;
     ok('request-access returns session', ra.status === 200 && !!uuid && typeof uuid === 'string' && /^[0-9a-f-]{36}$/.test(uuid), `expires=${ra.json && ra.json.expires_at}`);
-    ok('vless_url well-formed', !!ra.json.vless_url
-      && ra.json.vless_url.startsWith('vless://')
-      && ra.json.vless_url.includes(uuid)
-      && ra.json.vless_url.includes('/ws')
-      && ra.json.vless_url.includes('security=none')
-      && ra.json.vless_url.includes('type=ws'),
-      ra.json.vless_url);
+    let linkOk = false, linkDetail = 'no url';
+    try {
+      const u = new URL(ra.json.vless_url.replace(/^vless:/, 'https:'));
+      linkOk = u.username === uuid
+        && u.searchParams.get('path') === '/ws'
+        && u.searchParams.get('type') === 'ws'
+        && u.searchParams.get('security') === 'none'
+        && u.searchParams.get('host') === '127.0.0.1'
+        && u.hostname === '127.0.0.1';
+      linkDetail = `user=${u.username} path=${u.searchParams.get('path')} type=${u.searchParams.get('type')} sec=${u.searchParams.get('security')}`;
+    } catch (_) { /* keep detail */ }
+    ok('vless_url well-formed', !!ra.json.vless_url && linkOk, linkDetail);
 
     // one-time token
     const ra2 = await api('/api/v1/request-access', { method: 'POST', body: { token: g.json.token } });
@@ -246,10 +251,10 @@ async function main() {
     ok('admin list shows sessions', list.status === 200
       && Array.isArray(list.json.sessions)
       && list.json.sessions.some((s) => s.uuid === uuid2),
-      `count=${list.json.active_sessions}`);
+      `status=${list.status} body=${String(list.text).slice(0, 160)}`);
 
     const del = await api(`/api/v1/admin/sessions/${uuid2}`, { method: 'DELETE', headers: { 'x-admin-token': ADMIN } });
-    ok('admin revoke single session', del.status === 200 && del.json.revoked >= 0);
+    ok('admin revoke single session', del.status === 200 && del.json.revoked >= 0, `status=${del.status} body=${String(del.text).slice(0, 160)}`);
 
     hs = await vlessHandshake({ uuidHex: uuid2 });
     ok('revoked uuid rejected at bridge', hs.closed && !hs.gotResponseHeader, `code=${hs.closeCode}`);
